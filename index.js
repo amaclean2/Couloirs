@@ -9,10 +9,6 @@ let websocket = null
 let user
 let userConversations
 
-const onConnection = (ws) => {
-  websocket = ws
-}
-
 const onMessage = (message) => {
   parseMessage({ message, userId: user?.userId }).then((result) => {
     logger.info({ result })
@@ -73,8 +69,12 @@ const onClose = (code, reason) => {
   userConversations.forEach((convo) => activeConversations[convo].delete(user))
 }
 
+const onConnection = (ws) => {
+  websocket = ws
+  ws.on('message', onMessage)
+  ws.on('close', onClose)
+}
+
 module.exports = {
-  onConnection,
-  onMessage,
-  onClose
+  onConnection
 }
