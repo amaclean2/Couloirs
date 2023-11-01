@@ -5,6 +5,9 @@
   "scripts": {
     "test": "echo \"no tests have been written yet\""
   },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "keywords": [],
   "author": "Andrew Maclean",
   "license": "ISC",
