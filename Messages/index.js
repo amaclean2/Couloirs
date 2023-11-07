@@ -8,8 +8,6 @@ const { userValidation } = require('../Validation/index.js')
 const parseMessage = async ({ message, userId = 0 }) => {
   message = JSON.parse(message)
 
-  console.log({ message, userId })
-
   switch (message.type) {
     case 'getAllConversations':
       return getUserConversations({ userId })
@@ -34,6 +32,7 @@ const parseMessage = async ({ message, userId = 0 }) => {
           message: 'at least two users need to be added to a conversation'
         }
       }
+      logger.info({ userIds: [...message.userIds, userId] })
       return createNewConversation({
         ...message,
         userIds: [...message.userIds, userId]
@@ -71,12 +70,9 @@ const verifyUser = ({ token }) => {
     })
 }
 
-const createNewConversation = ({ userIds, name = '' }) => {
+const createNewConversation = ({ userIds }) => {
   return serviceHandler.messagingService
-    .createConversation({
-      userIds,
-      conversationName: name
-    })
+    .createConversation({ userIds })
     .then((resp) => {
       return {
         conversation: {
@@ -84,7 +80,6 @@ const createNewConversation = ({ userIds, name = '' }) => {
             user_id: id
           })),
           conversation_id: resp.conversationId,
-          conversation_name: name,
           last_message: '',
           unread: false
         }

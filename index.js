@@ -10,12 +10,21 @@ let user
 let userConversations
 
 const onMessage = (message) => {
+  try {
+    JSON.parse(message)
+  } catch (error) {
+    websocket.send(
+      'Message is not a JSON object. Please format your request as JSON'
+    )
+    return
+  }
+
   parseMessage({ message, userId: user?.userId }).then((result) => {
     logger.info({ result })
     if (result?.userJoined) {
       // connect the user to the websocket and send a connected message
       user = {
-        ws,
+        websocket,
         userId: result.userJoined
       }
       connectedUsers.add(user)
@@ -31,7 +40,7 @@ const onMessage = (message) => {
       // to the database
       // include in the message the new conversation object
       activeConversations[result.message.conversation_id].forEach((user) => {
-        user.ws.send(JSON.stringify(result))
+        user.websocket.send(JSON.stringify(result))
       })
     } else if (result.conversation) {
       // a new conversation was added
@@ -66,7 +75,7 @@ const onMessage = (message) => {
 const onClose = (code, reason) => {
   logger.info(`Connection closed: ${code} ${reason}`)
   connectedUsers.delete(user)
-  userConversations.forEach((convo) => activeConversations[convo].delete(user))
+  userConversations?.forEach((convo) => activeConversations[convo].delete(user))
 }
 
 const onConnection = (ws) => {
