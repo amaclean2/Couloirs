@@ -39,9 +39,15 @@ const onMessage = (message) => {
       // send the message out to everyone in the conversation after it's been saved
       // to the database
       // include in the message the new conversation object
-      activeConversations[result.message.conversation_id].forEach((user) => {
+      if (activeConversations[result.message.conversation_id]) {
+        activeConversations[result.message.conversation_id].forEach((user) => {
+          user.websocket.send(JSON.stringify(result))
+        })
+      } else {
+        activeConversations[result.message.conversation_id] = new Set()
+        activeConversations[result.message.conversation_id].add(user)
         user.websocket.send(JSON.stringify(result))
-      })
+      }
     } else if (result.conversation) {
       // a new conversation was added
       // send the new conversation to every connected user in the conversation
