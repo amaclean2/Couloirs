@@ -95,10 +95,7 @@ const sendMessage = ({ userId, conversationId, messageBody }) => {
       senderId: userId,
       messageBody
     })
-    .then((message) => {
-      logger.info({ message })
-      return { message }
-    })
+    .then((message) => ({ message }))
 }
 
 module.exports = parseMessage

@@ -40,8 +40,13 @@ const onMessage = (message) => {
       // to the database
       // include in the message the new conversation object
       if (activeConversations[result.message.conversation_id]) {
+        logger.info(`Message from userId: ${result.message.user_id}`)
+
         activeConversations[result.message.conversation_id].forEach((user) => {
           user.websocket.send(JSON.stringify(result))
+          logger.info(
+            `Sent message to user ${user.userId} in conversation ${result.message.conversation_id}`
+          )
         })
       } else {
         activeConversations[result.message.conversation_id] = new Set()
