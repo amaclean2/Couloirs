@@ -11,7 +11,7 @@ const userValidation = ({ token }) => {
         reject(error)
       }
 
-      resolve({ idFromToken: decoded.id })
+      resolve({ idFromToken: decoded.id, isNative: decoded.native })
     })
   })
 }
