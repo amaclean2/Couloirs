@@ -1,50 +1,41 @@
-const jwt = require('jsonwebtoken')
-const fs = require('fs')
+const apn = require('apn')
 
-let generatedDate = null
-let currentToken = null
+const logger = require('./Config/logger')
 
-const generateJWTForAPNS = () => {
-  const privateKey = fs.readFileSync(process.env.PATH_TO_APNS_SECRET_KEY)
-
-  const thirtyMinutes = 1000 * 60 * 30
-
-  if (generatedDate === null || Date.now() - thirtyMinutes > generatedDate) {
-    generatedDate = Date.now()
-
-    currentToken = jwt.sign(
-      { iss: 'JL5XC754Z2', iat: Math.floor(generatedDate / 1000) },
-      privateKey,
-      { header: { alg: 'ES256', kid: process.env.APNS_KEY_ID } }
-    )
+const createAPNProvider = () => {
+  const options = {
+    token: {
+      key: process.env.PATH_TO_APNS_SECRET_KEY,
+      keyId: process.env.APNS_KEY_ID,
+      teamId: 'JL5XC754Z2'
+    },
+    production: false
   }
 
-  return currentToken
+  return new apn.Provider(options)
 }
 
-const makeAPNSRequest = (senderName, messageBody) => {
-  const bearerToken = generateJWTForAPNS()
+const apnProvider = createAPNProvider()
 
-  return axios
-    .post(
-      `https://${process.env.APNS_CONNECTION_URI}/3/device/${user.deviceToken}`,
-      {
-        aps: {
-          alert: {
-            title: senderName,
-            body: messageBody
-          }
-        }
-      },
-      {
-        authorization: `bearer ${bearerToken}`
-      }
-    )
-    .then((response) => {
-      logger.info(JSON.stringify(response))
-    })
+const createAPNNotificaiton = (senderName, messageBody, deviceTokens) => {
+  const note = new apn.Notification()
+
+  note.expiry = 0
+  note.alert = {
+    title: senderName,
+    body: messageBody
+  }
+  note.topic = 'com.sundaypeak.SundayPeak'
+
+  apnProvider.send(note, deviceTokens).then((result) => {
+    if (result.failed.length) {
+      logger.info(JSON.stringify({ result: result.failed }))
+    } else {
+      logger.info(JSON.stringify({ result: result.sent }))
+    }
+  })
 }
 
 module.exports = {
-  makeAPNSRequest
+  createAPNNotificaiton
 }

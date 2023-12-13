@@ -1,7 +1,7 @@
 const logger = require('./Config/logger.js')
 const { parseMessage } = require('./Messages')
 const { userValidation } = require('./Validation/index.js')
-const { makeAPNSRequest } = require('./utils.js')
+const { makeAPNSRequest, createAPNNotificaiton } = require('./utils.js')
 
 const connectedUsers = {}
 const activeConversations = {}
@@ -44,7 +44,7 @@ const onMessage = async (message) => {
   }
 
   parseMessage({ message: jsonMessage, userId }).then((result) => {
-    logger.info({ result })
+    logger.info(JSON.stringify({ result: Object.keys(result) }))
     if (result?.userJoined) {
       // connect the user to the websocket and send a connected message
 
@@ -69,19 +69,24 @@ const onMessage = async (message) => {
       if (activeConversations[result.message.conversation_id]) {
         logger.info(`Message from user: ${userId}`)
 
+        const deviceTokens = []
+
         activeConversations[result.message.conversation_id].forEach((user) => {
           connectedUsers[user].websocket.send(JSON.stringify(result))
           logger.info(
             `Sent message to user ${user} in conversation ${result.message.conversation_id}`
           )
-
-          if (user.deviceToken) {
-            makeAPNSRequest(
-              result.message.sender_name,
-              result.message.message_body
-            )
+          if (connectedUsers[user].deviceToken && user !== userId) {
+            deviceTokens.push(connectedUsers[user].deviceToken)
           }
         })
+        if (deviceTokens.length) {
+          createAPNNotificaiton(
+            result.message.sender_name,
+            result.message.message_body,
+            deviceTokens
+          )
+        }
       } else {
         activeConversations[result.message.conversation_id] = [userId]
         connectedUsers[userId].websocket.send(JSON.stringify(result))
