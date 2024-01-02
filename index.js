@@ -118,6 +118,8 @@ const onMessage = async (message) => {
         }
       })
       websocket.send(JSON.stringify(result))
+    } else if (result.userAdded) {
+      activeConversations[result.conversationId].push(result.userId)
     } else {
       // forward the handled response
       websocket.send(JSON.stringify(result))

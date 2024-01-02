@@ -25,9 +25,33 @@ const parseMessage = ({ message, userId }) => {
           message: 'at least two users need to be added to a conversation'
         }
       }
-      logger.info(JSON.stringify({ userIds: [...message.userIds, userId] }))
+      logger.info(
+        JSON.stringify({
+          newConversation: true,
+          userIds: [...message.userIds, userId]
+        })
+      )
       return createNewConversation({
-        userIds: [...message.userIds, userId]
+        userIds: [...message.userIds, userId],
+        senderId: userId
+      })
+    case 'addUserToConversation':
+      if (!message.userId || !message.conversationId) {
+        logger.error(
+          JSON.stringify({
+            message:
+              'a userId and a conversationId need to be specified to add the user to the conversation'
+          })
+        )
+        throw {
+          message:
+            'a userId and a conversationId need to be specified to add the user to the conversation'
+        }
+      }
+
+      addNewUserToConversation({
+        userId: message.userId,
+        conversationId: message.conversationId
       })
     default:
       return Promise.reject('no message type provided')
@@ -47,6 +71,29 @@ const getUserConversations = ({ userId }) => {
   return serviceHandler.messagingService
     .getConversationsPerUser({ userId })
     .then((conversations) => ({ conversations }))
+}
+
+const addNewUserToConversation = ({ userId, conversationId }) => {
+  try {
+    logger.info({
+      newUserToConversation: true,
+      userId,
+      conversationId
+    })
+
+    return serviceHandler.messagingService
+      .expandConversation({
+        userId,
+        conversationId
+      })
+      .then(() => ({
+        useAdded: true,
+        userId,
+        conversationId
+      }))
+  } catch (error) {
+    return { userAdded: false, error: { message: error.message ?? error } }
+  }
 }
 
 const createNewConversation = ({ userIds, senderId }) => {
