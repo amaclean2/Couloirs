@@ -1,7 +1,7 @@
 const logger = require('./Config/logger.js')
 const { parseMessage } = require('./Messages')
 const { userValidation } = require('./Validation/index.js')
-const { makeAPNSRequest, createAPNNotificaiton } = require('./utils.js')
+const { createAPNNotificaiton } = require('./utils.js')
 
 const connectedUsers = {}
 const activeConversations = {}
@@ -72,7 +72,10 @@ const onMessage = async (message) => {
         const deviceTokens = []
 
         activeConversations[result.message.conversation_id].forEach((user) => {
-          connectedUsers[user].websocket.send(JSON.stringify(result))
+          if (connectedUsers[user]) {
+            connectedUsers[user].websocket.send(JSON.stringify(result))
+          }
+
           logger.info(
             `Sent message to user ${user} in conversation ${result.message.conversation_id}`
           )
@@ -119,7 +122,13 @@ const onMessage = async (message) => {
       })
       websocket.send(JSON.stringify(result))
     } else if (result.userAdded) {
+      // add the user to the list of recepients from that conversation
       activeConversations[result.conversationId].push(result.userId)
+      activeConversations[result.conversationId].forEach((user) => {
+        if (connectedUsers[user]) {
+          connectedUsers[user].websocket.send(JSON.stringify(result))
+        }
+      })
     } else {
       // forward the handled response
       websocket.send(JSON.stringify(result))
