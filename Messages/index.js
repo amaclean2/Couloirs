@@ -74,29 +74,28 @@ const getUserConversations = ({ userId }) => {
 }
 
 const addNewUserToConversation = ({ userId, conversationId }) => {
-  try {
-    logger.info(
-      JSON.stringify({
-        newUserToConversation: true,
-        userId,
-        conversationId
-      })
-    )
+  logger.info(
+    JSON.stringify({
+      newUserToConversation: true,
+      userId,
+      conversationId
+    })
+  )
 
-    return serviceHandler.messagingService
-      .expandConversation({
-        userId,
-        conversationId
-      })
-      .then(() => ({
-        useAdded: true,
-        userId,
-        conversationId
-      }))
-  } catch (error) {
-    console.log(error)
-    return { userAdded: false, error: { message: error.message ?? error } }
-  }
+  return serviceHandler.messagingService
+    .expandConversation({
+      userId,
+      conversationId
+    })
+    .then(() => ({
+      useAdded: true,
+      userId,
+      conversationId
+    }))
+    .catch((error) => {
+      console.log(error)
+      return { userAdded: false, error: { message: error.message ?? error } }
+    })
 }
 
 const createNewConversation = ({ userIds, senderId }) => {
