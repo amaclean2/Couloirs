@@ -20,10 +20,15 @@ const parseMessage = ({ message, userId }) => {
         senderName: message.senderName
       })
     case 'createNewConversation':
-      if (!message.userIds || !message.userIds.length) {
-        throw {
-          message: 'at least two users need to be added to a conversation'
-        }
+      console.log(message.userIds, userId)
+      if (
+        !message.userIds ||
+        !message.userIds.length ||
+        message.userIds.includes(null)
+      ) {
+        return Promise.resolve({
+          error: 'at least two users need to be added to a conversation'
+        })
       }
       logger.info(
         JSON.stringify({
@@ -43,34 +48,49 @@ const parseMessage = ({ message, userId }) => {
               'a userId and a conversationId need to be specified to add the user to the conversation'
           })
         )
-        throw {
-          message:
+
+        return Promise.resolve({
+          error:
             'a userId and a conversationId need to be specified to add the user to the conversation'
-        }
+        })
       }
 
-      addNewUserToConversation({
+      return addNewUserToConversation({
         userId: message.userId,
         conversationId: message.conversationId
       })
     default:
-      return Promise.reject('no message type provided')
+      return Promise.resolve({ error: 'no message type provided' })
   }
 }
 
 const getConversation = ({ conversationId, userId }) => {
+  logger.info(`Getting conversation ${conversationId}`)
   return serviceHandler.messagingService
     .getConversation({
       conversationId,
       userId
     })
     .then((messages) => ({ messages }))
+    .catch((error) => {
+      logger.error(error)
+      return Promise.resolve({
+        error: `No conversation found for id ${conversationId}`
+      })
+    })
 }
 
 const getUserConversations = ({ userId }) => {
+  logger.info(`Getting conversations for user ${userId}`)
   return serviceHandler.messagingService
     .getConversationsPerUser({ userId })
     .then((conversations) => ({ conversations }))
+    .catch((error) => {
+      logger.error(error)
+      return Promise.resolve({
+        error: `Conversations not found for user ${userId}`
+      })
+    })
 }
 
 const addNewUserToConversation = ({ userId, conversationId }) => {
@@ -93,7 +113,7 @@ const addNewUserToConversation = ({ userId, conversationId }) => {
       conversationId
     }))
     .catch((error) => {
-      console.log(error)
+      logger.error(error)
       return { userAdded: false, error: { message: error.message ?? error } }
     })
 }
@@ -125,6 +145,10 @@ const createNewConversation = ({ userIds, senderId }) => {
         senderId
       }
     })
+    .catch((error) => {
+      logger.error(error)
+      return Promise.resolve({ error: 'could not create a new conversation' })
+    })
 }
 
 const sendMessage = ({ userId, conversationId, messageBody, senderName }) => {
@@ -137,6 +161,10 @@ const sendMessage = ({ userId, conversationId, messageBody, senderName }) => {
       messageBody
     })
     .then((message) => ({ message: { ...message, sender_name: senderName } }))
+    .catch((error) => {
+      logger.error(error)
+      return Promise.resolve({ error: 'Could not send message' })
+    })
 }
 
 module.exports = {

@@ -43,6 +43,8 @@ const onMessage = async (message) => {
     return
   }
 
+  logger.info(`Message received: ${jsonMessage.type}`)
+
   parseMessage({ message: jsonMessage, userId }).then((result) => {
     logger.info(JSON.stringify({ result: Object.keys(result) }))
     if (result?.userJoined) {
@@ -129,6 +131,8 @@ const onMessage = async (message) => {
           connectedUsers[user].websocket.send(JSON.stringify(result))
         }
       })
+    } else if (result.error) {
+      logger.error(result.error.message ?? result.error)
     } else {
       // forward the handled response
       websocket.send(JSON.stringify(result))
