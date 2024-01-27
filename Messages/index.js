@@ -11,6 +11,17 @@ const parseMessage = ({ message, userId }) => {
     case 'getConversation':
       return getConversation({ conversationId: message.conversationId, userId })
     case 'verifyUser':
+      if (message.deviceToken) {
+        // save the device token if one is provided
+        // if the token is already in the database it'll ignore it
+        logger.info('couloirs: saving device token')
+
+        return serviceHandler.messagingService.saveDeviceToken({
+          userId,
+          token: message.deviceToken
+        })
+      }
+
       return Promise.resolve({ userJoined: true })
     case 'sendMessage':
       return sendMessage({
@@ -151,20 +162,36 @@ const createNewConversation = ({ userIds, senderId }) => {
     })
 }
 
-const sendMessage = ({ userId, conversationId, messageBody, senderName }) => {
-  logger.info(JSON.stringify({ receivedMessage: { conversationId, userId } }))
+const sendMessage = async ({
+  userId,
+  conversationId,
+  messageBody,
+  senderName
+}) => {
+  try {
+    logger.info(JSON.stringify({ receivedMessage: { conversationId, userId } }))
 
-  return serviceHandler.messagingService
-    .sendMessage({
+    const message = await serviceHandler.messagingService.sendMessage({
       conversationId,
-      senderId: userId,
+      senderId,
       messageBody
     })
-    .then((message) => ({ message: { ...message, sender_name: senderName } }))
-    .catch((error) => {
-      logger.error(error)
-      return Promise.resolve({ error: 'Could not send message' })
-    })
+
+    const deviceTokens = message.applied_tokens
+
+    if (deviceTokens.length) {
+      logger.info('Sending notifications to connected device tokens')
+      createAPNNotificaiton(senderName, messageBody, deviceTokens)
+    }
+
+    return {
+      ...message,
+      sender_name: senderName
+    }
+  } catch (error) {
+    logger.error(error)
+    return Promise.resolve({ error: 'Could not send message' })
+  }
 }
 
 module.exports = {

@@ -1,6 +1,6 @@
 {
   "name": "@amaclean2/sundaypeak-couloirs",
-  "version": "1.2.9",
+  "version": "1.2.10",
   "description": "The websocket layer of Sunday Peak",
   "scripts": {
     "test": "echo \"no tests have been written yet\""
@@ -12,7 +12,7 @@
   "author": "Andrew Maclean",
   "license": "ISC",
   "dependencies": {
-    "@amaclean2/sundaypeak-water": "^1.7.8",
+    "@amaclean2/sundaypeak-water": "^1.7.28",
     "apn": "^2.2.0",
     "dotenv": "^16.0.3",
     "env-cmd": "^10.1.0",

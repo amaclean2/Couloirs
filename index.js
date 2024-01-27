@@ -55,6 +55,7 @@ const onMessage = async (message) => {
       }
 
       if (jsonMessage.deviceToken)
+        // save the device token
         userObject.deviceToken = jsonMessage.deviceToken
 
       connectedUsers[userId] = userObject
@@ -71,8 +72,6 @@ const onMessage = async (message) => {
       if (activeConversations[result.message.conversation_id]) {
         logger.info(`Message from user: ${userId}`)
 
-        const deviceTokens = []
-
         activeConversations[result.message.conversation_id].forEach((user) => {
           if (connectedUsers[user]) {
             connectedUsers[user].websocket.send(JSON.stringify(result))
@@ -81,17 +80,7 @@ const onMessage = async (message) => {
           logger.info(
             `Sent message to user ${user} in conversation ${result.message.conversation_id}`
           )
-          if (connectedUsers[user].deviceToken && user !== userId) {
-            deviceTokens.push(connectedUsers[user].deviceToken)
-          }
         })
-        if (deviceTokens.length) {
-          createAPNNotificaiton(
-            result.message.sender_name,
-            result.message.message_body,
-            deviceTokens
-          )
-        }
       } else {
         activeConversations[result.message.conversation_id] = [userId]
         connectedUsers[userId].websocket.send(JSON.stringify(result))
