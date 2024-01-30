@@ -4,7 +4,7 @@ const serviceHandler = require('../Config/services.js')
 /**
  * @param {Object} message
  */
-const parseMessage = ({ message, userId }) => {
+const parseMessage = async ({ message, userId }) => {
   switch (message.type) {
     case 'getAllConversations':
       return getUserConversations({ userId })
@@ -16,10 +16,14 @@ const parseMessage = ({ message, userId }) => {
         // if the token is already in the database it'll ignore it
         logger.info('couloirs: saving device token')
 
-        return serviceHandler.messagingService.saveDeviceToken({
-          userId,
-          token: message.deviceToken
-        })
+        const successMessage =
+          await serviceHandler.messagingService.saveDeviceToken({
+            userId,
+            token: message.deviceToken
+          })
+        logger.info(
+          JSON.stringify({ deviceTokenSuccessMessage: successMessage })
+        )
       }
 
       return Promise.resolve({ userJoined: true })
