@@ -190,8 +190,10 @@ const sendMessage = async ({
     }
 
     return {
-      ...message,
-      sender_name: senderName
+      message: {
+        ...message,
+        sender_name: senderName
+      }
     }
   } catch (error) {
     logger.error(error)
