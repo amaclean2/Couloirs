@@ -173,7 +173,7 @@ const sendMessage = async ({
 
     const message = await serviceHandler.messagingService.sendMessage({
       conversationId,
-      senderId,
+      senderId: userId,
       messageBody
     })
 
