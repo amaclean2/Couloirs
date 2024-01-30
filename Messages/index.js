@@ -1,5 +1,6 @@
 const logger = require('../Config/logger.js')
 const serviceHandler = require('../Config/services.js')
+const { createAPNNotification } = require('../utils.js')
 
 /**
  * @param {Object} message
@@ -185,7 +186,7 @@ const sendMessage = async ({
 
     if (deviceTokens.length) {
       logger.info('Sending notifications to connected device tokens')
-      createAPNNotificaiton(senderName, messageBody, deviceTokens)
+      createAPNNotification(senderName, messageBody, deviceTokens)
     }
 
     return {

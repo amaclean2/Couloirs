@@ -17,7 +17,7 @@ const createAPNProvider = () => {
 
 const apnProvider = createAPNProvider()
 
-const createAPNNotificaiton = (senderName, messageBody, deviceTokens) => {
+const createAPNNotification = (senderName, messageBody, deviceTokens) => {
   const note = new apn.Notification()
 
   note.expiry = 0
@@ -37,5 +37,5 @@ const createAPNNotificaiton = (senderName, messageBody, deviceTokens) => {
 }
 
 module.exports = {
-  createAPNNotificaiton
+  createAPNNotification
 }

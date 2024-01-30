@@ -1,7 +1,6 @@
 const logger = require('./Config/logger.js')
 const { parseMessage } = require('./Messages')
 const { userValidation } = require('./Validation/index.js')
-const { createAPNNotificaiton } = require('./utils.js')
 
 const connectedUsers = {}
 const activeConversations = {}
