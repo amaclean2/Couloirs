@@ -1,16 +1,21 @@
-const logger = require('../Config/logger.js')
 const serviceHandler = require('../Config/services.js')
 const { createAPNNotification } = require('../utils.js')
 
 /**
  * @param {Object} message
  */
-const parseMessage = async ({ message, userId }) => {
+const parseMessage = async ({ message, userId, logger }) => {
   switch (message.type) {
     case 'getAllConversations':
-      return getUserConversations({ userId })
+      return getUserConversations({ userId, logger })
+
     case 'getConversation':
-      return getConversation({ conversationId: message.conversationId, userId })
+      return getConversation({
+        conversationId: message.conversationId,
+        userId,
+        logger
+      })
+
     case 'verifyUser':
       if (message.deviceToken) {
         // save the device token if one is provided
@@ -28,15 +33,18 @@ const parseMessage = async ({ message, userId }) => {
       }
 
       return Promise.resolve({ userJoined: true })
+
     case 'sendMessage':
       return sendMessage({
         conversationId: message.conversationId,
         messageBody: message.messageBody,
         userId,
-        senderName: message.senderName
+        senderName: message.senderName,
+        logger
       })
+
     case 'createNewConversation':
-      console.log(message.userIds, userId)
+      logger.info(JSON.stringify({ userIds: [...message.userIds, userId] }))
       if (
         !message.userIds ||
         !message.userIds.length ||
@@ -54,8 +62,10 @@ const parseMessage = async ({ message, userId }) => {
       )
       return createNewConversation({
         userIds: [...message.userIds, userId],
-        senderId: userId
+        senderId: userId,
+        logger
       })
+
     case 'addUserToConversation':
       if (!message.userId || !message.conversationId) {
         logger.error(
@@ -73,14 +83,15 @@ const parseMessage = async ({ message, userId }) => {
 
       return addNewUserToConversation({
         userId: message.userId,
-        conversationId: message.conversationId
+        conversationId: message.conversationId,
+        logger
       })
     default:
       return Promise.resolve({ error: 'no message type provided' })
   }
 }
 
-const getConversation = ({ conversationId, userId }) => {
+const getConversation = ({ conversationId, userId, logger }) => {
   logger.info(`Getting conversation ${conversationId}`)
   return serviceHandler.messagingService
     .getConversation({
@@ -96,7 +107,7 @@ const getConversation = ({ conversationId, userId }) => {
     })
 }
 
-const getUserConversations = ({ userId }) => {
+const getUserConversations = ({ userId, logger }) => {
   logger.info(`Getting conversations for user ${userId}`)
   return serviceHandler.messagingService
     .getConversationsPerUser({ userId })
@@ -109,7 +120,7 @@ const getUserConversations = ({ userId }) => {
     })
 }
 
-const addNewUserToConversation = ({ userId, conversationId }) => {
+const addNewUserToConversation = ({ userId, conversationId, logger }) => {
   logger.info(
     JSON.stringify({
       newUserToConversation: true,
@@ -134,7 +145,7 @@ const addNewUserToConversation = ({ userId, conversationId }) => {
     })
 }
 
-const createNewConversation = ({ userIds, senderId }) => {
+const createNewConversation = ({ userIds, senderId, logger }) => {
   return serviceHandler.messagingService
     .createConversation({ userIds })
     .then((resp) => {
@@ -171,7 +182,8 @@ const sendMessage = async ({
   userId,
   conversationId,
   messageBody,
-  senderName
+  senderName,
+  logger
 }) => {
   try {
     logger.info(JSON.stringify({ receivedMessage: { conversationId, userId } }))
@@ -184,9 +196,11 @@ const sendMessage = async ({
 
     const deviceTokens = message.applied_tokens
 
+    logger.info(JSON.stringify({ deviceTokens: message.applied_tokens }))
+
     if (deviceTokens.length) {
       logger.info('Sending notifications to connected device tokens')
-      createAPNNotification(senderName, messageBody, deviceTokens)
+      createAPNNotification(senderName, messageBody, deviceTokens, logger)
     }
 
     return {

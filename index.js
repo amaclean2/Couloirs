@@ -42,90 +42,98 @@ const onMessage = async (message) => {
     return
   }
 
-  logger.info(`Message received: ${jsonMessage.type}`)
+  const localLogger = logger.child({ userId, service: 'couloirs ' })
 
-  parseMessage({ message: jsonMessage, userId }).then((result) => {
-    logger.info(JSON.stringify({ result: Object.keys(result) }))
-    if (result?.userJoined) {
-      // connect the user to the websocket and send a connected message
+  localLogger.info(`Message received: ${jsonMessage.type}`)
 
-      const userObject = {
-        websocket
-      }
+  parseMessage({ message: jsonMessage, userId, logger: localLogger }).then(
+    (result) => {
+      localLogger.info(JSON.stringify({ result: Object.keys(result) }))
+      if (result?.userJoined) {
+        // connect the user to the websocket and send a connected message
 
-      if (jsonMessage.deviceToken)
-        // save the device token
-        userObject.deviceToken = jsonMessage.deviceToken
+        const userObject = {
+          websocket
+        }
 
-      connectedUsers[userId] = userObject
+        if (jsonMessage.deviceToken)
+          // save the device token
+          userObject.deviceToken = jsonMessage.deviceToken
 
-      websocket.send(
-        JSON.stringify({
-          connected: true,
-          message: `user ${userId} connected`
+        connectedUsers[userId] = userObject
+
+        websocket.send(
+          JSON.stringify({
+            connected: true,
+            message: `user ${userId} connected`
+          })
+        )
+      } else if (result.message) {
+        // send the message out to everyone in the conversation after it's been saved to the database
+        // include in the message the new conversation object
+        if (activeConversations[result.message.conversation_id]) {
+          localLogger.info(`Message from user: ${userId}`)
+
+          activeConversations[result.message.conversation_id].forEach(
+            (user) => {
+              if (connectedUsers[user]) {
+                connectedUsers[user].websocket.send(JSON.stringify(result))
+              }
+
+              localLogger.info(
+                `Sent message to user ${user} in conversation ${result.message.conversation_id}`
+              )
+            }
+          )
+        } else {
+          activeConversations[result.message.conversation_id] = [userId]
+          connectedUsers[userId].websocket.send(JSON.stringify(result))
+        }
+      } else if (result.conversation) {
+        // a new conversation was added
+        // send the new conversation to every connected user in the conversation
+        // and add the conversation to the active conversations
+        activeConversations[result.conversation.conversation_id] = [userId]
+        result.conversation.users.forEach((user) => {
+          if (connectedUsers?.[user.user_id]) {
+            connectedUsers[user.user_id].websocket.send(JSON.stringify(result))
+          }
         })
-      )
-    } else if (result.message) {
-      // send the message out to everyone in the conversation after it's been saved to the database
-      // include in the message the new conversation object
-      if (activeConversations[result.message.conversation_id]) {
-        logger.info(`Message from user: ${userId}`)
+      } else if (result.messages) {
+        // responding to a request for all the messages for a particular conversation
+        connectedUsers[userId].websocket.send(JSON.stringify(result))
+      } else if (result.conversations) {
+        // subscribe the user to each conversation once they are connected
+        const userConversationKeys = Object.keys(result.conversations)
 
-        activeConversations[result.message.conversation_id].forEach((user) => {
+        userConversationKeys.forEach((conversationKey) => {
+          if (activeConversations[conversationKey]) {
+            activeConversations[conversationKey].push(userId)
+            const tempConversation = new Set(
+              activeConversations[conversationKey]
+            )
+            activeConversations[conversationKey] = [...tempConversation]
+          } else {
+            activeConversations[conversationKey] = [userId]
+          }
+        })
+        websocket.send(JSON.stringify(result))
+      } else if (result.userAdded) {
+        // add the user to the list of recepients from that conversation
+        activeConversations[result.conversationId].push(result.userId)
+        activeConversations[result.conversationId].forEach((user) => {
           if (connectedUsers[user]) {
             connectedUsers[user].websocket.send(JSON.stringify(result))
           }
-
-          logger.info(
-            `Sent message to user ${user} in conversation ${result.message.conversation_id}`
-          )
         })
+      } else if (result.error) {
+        localLogger.error(result.error.message ?? result.error)
       } else {
-        activeConversations[result.message.conversation_id] = [userId]
-        connectedUsers[userId].websocket.send(JSON.stringify(result))
+        // forward the handled response
+        websocket.send(JSON.stringify(result))
       }
-    } else if (result.conversation) {
-      // a new conversation was added
-      // send the new conversation to every connected user in the conversation
-      // and add the conversation to the active conversations
-      activeConversations[result.conversation.conversation_id] = [userId]
-      result.conversation.users.forEach((user) => {
-        if (connectedUsers?.[user.user_id]) {
-          connectedUsers[user.user_id].websocket.send(JSON.stringify(result))
-        }
-      })
-    } else if (result.messages) {
-      // responding to a request for all the messages for a particular conversation
-      connectedUsers[userId].websocket.send(JSON.stringify(result))
-    } else if (result.conversations) {
-      // subscribe the user to each conversation once they are connected
-      const userConversationKeys = Object.keys(result.conversations)
-
-      userConversationKeys.forEach((conversationKey) => {
-        if (activeConversations[conversationKey]) {
-          activeConversations[conversationKey].push(userId)
-          const tempConversation = new Set(activeConversations[conversationKey])
-          activeConversations[conversationKey] = [...tempConversation]
-        } else {
-          activeConversations[conversationKey] = [userId]
-        }
-      })
-      websocket.send(JSON.stringify(result))
-    } else if (result.userAdded) {
-      // add the user to the list of recepients from that conversation
-      activeConversations[result.conversationId].push(result.userId)
-      activeConversations[result.conversationId].forEach((user) => {
-        if (connectedUsers[user]) {
-          connectedUsers[user].websocket.send(JSON.stringify(result))
-        }
-      })
-    } else if (result.error) {
-      logger.error(result.error.message ?? result.error)
-    } else {
-      // forward the handled response
-      websocket.send(JSON.stringify(result))
     }
-  })
+  )
 }
 
 const onClose = (code, reason) => {

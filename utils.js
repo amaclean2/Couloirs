@@ -1,7 +1,5 @@
 const apn = require('apn')
 
-const logger = require('./Config/logger')
-
 const createAPNProvider = () => {
   const options = {
     token: {
@@ -17,7 +15,12 @@ const createAPNProvider = () => {
 
 const apnProvider = createAPNProvider()
 
-const createAPNNotification = (senderName, messageBody, deviceTokens) => {
+const createAPNNotification = (
+  senderName,
+  messageBody,
+  deviceTokens,
+  logger
+) => {
   const note = new apn.Notification()
 
   note.expiry = 0
