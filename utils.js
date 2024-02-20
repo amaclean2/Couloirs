@@ -7,7 +7,7 @@ const createAPNProvider = () => {
       keyId: process.env.APNS_KEY_ID,
       teamId: 'JL5XC754Z2'
     },
-    production: false
+    production: true
   }
 
   return new apn.Provider(options)

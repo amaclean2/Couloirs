@@ -42,7 +42,7 @@ const onMessage = async (message) => {
     return
   }
 
-  const localLogger = logger.child({ userId, service: 'couloirs ' })
+  const localLogger = logger.child({ meta: { userId } })
 
   localLogger.info(`Message received: ${jsonMessage.type}`)
 

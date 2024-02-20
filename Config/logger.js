@@ -17,7 +17,8 @@ if (process.env.NODE_ENV === 'production') {
       tryReconnect: true,
       options: {
         useUnifiedTopology: true
-      }
+      },
+      metaKey: 'meta'
     })
   )
 }
