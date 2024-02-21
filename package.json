@@ -12,6 +12,7 @@
   "author": "Andrew Maclean",
   "license": "ISC",
   "dependencies": {
+    "@amaclean2/sundaypeak-water": "^1.8.28",
     "apn": "^2.2.0",
     "dotenv": "^16.0.3",
     "env-cmd": "^10.1.0",
