@@ -21,10 +21,10 @@ const verifyUser = ({ token }) => {
 const onConnection = (ws) => {
   logger.info('connected to new client')
 
-  ws.on('message', async (message) => {
-    let currentUserId = null
-    let jsonMessage = null
+  let currentUserId = null
+  let jsonMessage = null
 
+  ws.on('message', async (message) => {
     try {
       jsonMessage = JSON.parse(message)
     } catch (error) {
