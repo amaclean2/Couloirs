@@ -13,8 +13,16 @@ const parseMessage = async ({ message, userId, logger }) => {
       response = await getUserConversations({ userId, logger })
       break
     case 'getConversation':
+      if (!message.conversation_id) {
+        response = await Promise.resolve({
+          error:
+            'A non-zero conversation_id needs to be included when requesting a conversation'
+        })
+        break
+      }
+
       response = await getConversation({
-        conversationId: message.conversationId,
+        conversationId: message.conversation_id,
         userId,
         logger
       })
@@ -38,20 +46,27 @@ const parseMessage = async ({ message, userId, logger }) => {
       response = await Promise.resolve({ userJoined: true })
       break
     case 'sendMessage':
+      if (!message.conversation_id) {
+        response = await Promise.resolve({
+          error:
+            'Sending a message should include the properties conversation_id: String, message_body: String, sender_name: String'
+        })
+        break
+      }
+
       response = await sendMessage({
-        conversationId: message.conversationId,
-        messageBody: message.messageBody,
+        conversationId: message.conversation_id,
+        messageBody: message.message_body ?? '',
         userId,
-        senderName: message.senderName,
+        senderName: message.sender_name ?? '',
         logger
       })
       break
     case 'createNewConversation':
-      logger.info(JSON.stringify({ userIds: [...message.userIds, userId] }))
       if (
-        !message.userIds?.length ||
-        message.userIds.includes(null) ||
-        message.userIds.includes(undefined)
+        !message.user_ids?.length ||
+        message.user_ids.includes(null) ||
+        message.user_ids.includes(undefined)
       ) {
         response = await Promise.resolve({
           error:
@@ -59,8 +74,11 @@ const parseMessage = async ({ message, userId, logger }) => {
         })
         break
       }
+
+      logger.info(JSON.stringify({ userIds: [...message.user_ids, userId] }))
+
       response = await createNewConversation({
-        userIds: [...message.userIds, userId],
+        userIds: [...message.user_ids, userId],
         logger
       })
       break
@@ -87,7 +105,9 @@ const parseMessage = async ({ message, userId, logger }) => {
       })
       break
     default:
-      response = await Promise.resolve({ error: 'no message type provided' })
+      response = await Promise.resolve({
+        error: `no message type provided. Message type must be one of type "getAllConversations", "getConversation", "verifyUser", "sendMessage", "createNewConversation", "addUserToConversation"`
+      })
       break
   }
   return { ...response, request: message.type }
@@ -176,15 +196,12 @@ const sendMessage = async ({
       JSON.stringify({ receivedMessage: { conversationId, senderId } })
     )
 
-    const message = {
-      ...(await serviceHandler.messagingService.sendMessage({
-        conversationId,
-        senderId,
-        senderName,
-        messageBody
-      })),
-      sender_name: senderName
-    }
+    const message = await serviceHandler.messagingService.sendMessage({
+      conversationId,
+      senderId,
+      senderName,
+      messageBody
+    })
 
     return { message }
   } catch (error) {
