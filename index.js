@@ -89,6 +89,7 @@ const onConnection = (ws) => {
         // include in the message the new conversation object
         if (data.error) {
           ws.send(JSON.stringify(data))
+          break
         } else if (activeConversations[data.message.conversation_id]) {
           localLogger.info(`Message from user: ${currentUserId}`)
 
@@ -115,6 +116,7 @@ const onConnection = (ws) => {
         // and add the conversation to the active conversations
         if (data.error) {
           ws.send(JSON.stringify(data))
+          break
         } else if (data.conversation_exists === false) {
           const newConversation = data.conversations[0]
           activeConversations[newConversation.conversation_id] =
@@ -125,9 +127,10 @@ const onConnection = (ws) => {
               connectedUsers[user_id].websocket.send(JSON.stringify(data))
             }
           })
-        } else {
-          ws.send(JSON.stringify(data))
         }
+
+        ws.send(JSON.stringify(data))
+
         break
       case 'getConversation':
         // responding to a request for all the messages for a particular conversation
@@ -152,17 +155,42 @@ const onConnection = (ws) => {
         ws.send(JSON.stringify(data))
         break
       case 'addUserToConversation':
-        // add the user to the list of recepients from that conversation
-        activeConversations[data.conversation_id].push(data.user_id)
-        activeConversations[data.conversation_id].forEach((userId) => {
-          if (connectedUsers[userId]) {
-            connectedUsers[userId].websocket.send(JSON.stringify(data))
+        if (data.error) {
+          ws.send(JSON.stringify(data))
+          break
+        }
+
+        if (data.user_added) {
+          // data.new_user conforms to `ShortUser`
+          // to all the other users in the conversation, send the object for the new user
+          activeConversations[data.conversationId]?.forEach((userId) => {
+            if (connectedUsers[userId]) {
+              connectedUsers[userId].websocket.send(
+                JSON.stringify(data.newUser)
+              )
+            }
+          })
+
+          // add the new user to the conversation and send the new list of conversations to that user
+          if (activeConversations[data.conversationId]) {
+            activeConversations[data.conversationId].push(data.newUser.user_id)
+          } else {
+            activeConversations[data.conversationId] = [data.newUser.user_id]
           }
-        })
+
+          if (connectedUsers[data.newUser.user_id]) {
+            connectedUsers[data.newUser.user_id].websocket.send(
+              JSON.stringify(data.newUserConversations)
+            )
+          }
+        } else {
+          ws.send(JSON.stringify(data))
+        }
         break
       default:
         if (data.error) {
           localLogger.error(data.error.message ?? data.error)
+          break
         }
 
         ws.send(JSON.stringify(data))

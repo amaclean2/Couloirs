@@ -66,11 +66,12 @@ const parseMessage = async ({ message, userId, logger }) => {
       if (
         !message.user_ids?.length ||
         message.user_ids.includes(null) ||
-        message.user_ids.includes(undefined)
+        message.user_ids.includes(undefined) ||
+        message.user_ids.includes(userId)
       ) {
         response = await Promise.resolve({
           error:
-            'At least two users including the logged in user need to be added to a conversation'
+            "At least one additional user needs to be added to the conversation in the block user_ids: [number]. Don't add the current user."
         })
         break
       }
@@ -83,24 +84,21 @@ const parseMessage = async ({ message, userId, logger }) => {
       })
       break
     case 'addUserToConversation':
-      if (!message.userId || !message.conversationId) {
+      if (!message.user_id || !message.conversation_id) {
         logger.error(
-          JSON.stringify({
-            message:
-              'a userId and a conversationId need to be specified to add the user to the conversation'
-          })
+          'a user_id and a conversation_id need to be specified to add the user to the conversation'
         )
 
         response = await Promise.resolve({
           error:
-            'a userId and a conversationId need to be specified to add the user to the conversation'
+            'a user_id and a conversation_id need to be specified to add the user to the conversation'
         })
         break
       }
 
       response = await addNewUserToConversation({
-        userId: message.userId,
-        conversationId: message.conversationId,
+        userId: message.user_id,
+        conversationId: message.conversation_id,
         logger
       })
       break
@@ -144,10 +142,11 @@ const getUserConversations = async ({ userId, logger }) => {
 const addNewUserToConversation = async ({ userId, conversationId, logger }) => {
   try {
     logger.info(`Adding new user to conversation ${conversationId}`)
-    await serviceHandler.messagingService.expandConversation({
-      userId,
-      conversationId
-    })
+    const { newUserConversations, newUser } =
+      await serviceHandler.messagingService.expandConversation({
+        userId,
+        conversationId
+      })
 
     logger.info(
       JSON.stringify({
@@ -159,12 +158,13 @@ const addNewUserToConversation = async ({ userId, conversationId, logger }) => {
 
     return {
       user_added: true,
-      user_id: userId,
-      conversation_id: conversationId
+      newUser,
+      conversationId,
+      newUserConversations
     }
   } catch (error) {
     logger.error(error)
-    return { userAdded: false, error: { message: error.message ?? error } }
+    return { user_added: false, error: error.message ?? error }
   }
 }
 
