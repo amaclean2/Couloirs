@@ -2,10 +2,11 @@ const logger = require('./Config/logger.js')
 const { parseMessage } = require('./Messages')
 const { userValidation } = require('./Validation/index.js')
 
+// [userId: websocket]
 const connectedUsers = {}
-const activeConversations = {}
 
-let websocket = null
+// [conversationId: userId[]]
+const activeConversations = {}
 
 const verifyUser = ({ token }) => {
   if (!token) {
@@ -17,134 +18,146 @@ const verifyUser = ({ token }) => {
   })
 }
 
-const onMessage = async (message) => {
-  let userId
-  let jsonMessage
-  try {
-    jsonMessage = JSON.parse(message)
+const onConnection = (ws) => {
+  ws.on('message', async (message) => {
+    let currentUserId = null
+    let jsonMessage = null
 
-    const result = await verifyUser({
-      token: jsonMessage.token
-    })
-    userId = result.idFromToken
-  } catch (error) {
-    if (error?.message.includes('Invalid token')) {
-      logger.error('A user auth token is required in all messages')
-      return websocket.send(
-        'The auth token provided on login is required in all messages.'
+    try {
+      jsonMessage = JSON.parse(message)
+    } catch (error) {
+      logger.error(error)
+
+      ws.send(
+        'Message is not a JSON object. Please format your request as JSON.'
       )
+      return
     }
 
-    logger.error(error)
-    websocket.send(
-      'Message is not a JSON object. Please format your request as JSON.'
-    )
-    return
-  }
+    try {
+      const result = await verifyUser({ token: jsonMessage.token })
 
-  const localLogger = logger.child({ meta: { userId } })
+      currentUserId = result.idFromToken
+    } catch (error) {
+      if (error?.message.includes('Invalid token')) {
+        const authTokenMsg =
+          'The auth token provided on login is required in all messages'
 
-  localLogger.info(`Message received: ${jsonMessage.type}`)
+        logger.error(authTokenMsg)
+        return ws.send(authTokenMsg)
+      }
+    }
 
-  parseMessage({ message: jsonMessage, userId, logger: localLogger }).then(
-    (result) => {
-      localLogger.info(JSON.stringify({ result: Object.keys(result) }))
-      if (result?.userJoined) {
+    const localLogger = logger.child({ meta: { userId: currentUserId } })
+
+    localLogger.info(`Message received: ${jsonMessage.type}`)
+
+    const data = await parseMessage({
+      message: jsonMessage,
+      currentUserId: userId,
+      logger: localLogger
+    })
+
+    localLogger.info(JSON.stringify({ result: Object.keys(data) }))
+
+    switch (jsonMessage.type) {
+      case 'verifyUser':
         // connect the user to the websocket and send a connected message
+        const userObject = { ws }
 
-        const userObject = {
-          websocket
-        }
-
-        if (jsonMessage.deviceToken)
+        if (jsonMessage.deviceToken) {
           // save the device token
           userObject.deviceToken = jsonMessage.deviceToken
+        }
 
-        connectedUsers[userId] = userObject
+        connectedUsers[currentUserId] = userObject
 
-        websocket.send(
-          JSON.stringify({
-            connected: true,
-            message: `user ${userId} connected`
-          })
-        )
-      } else if (result.message) {
+        ws.send(JSON.stringify(data))
+        break
+      case 'sendMessage':
         // send the message out to everyone in the conversation after it's been saved to the database
         // include in the message the new conversation object
-        if (activeConversations[result.message.conversation_id]) {
-          localLogger.info(`Message from user: ${userId}`)
+        if (activeConversations[data.message.conversation_id]) {
+          localLogger.info(`Message from user: ${currentUserId}`)
 
           activeConversations[result.message.conversation_id].forEach(
-            (user) => {
-              if (connectedUsers[user]) {
-                connectedUsers[user].websocket.send(JSON.stringify(result))
+            (userId) => {
+              if (connectedUsers[userId]) {
+                connectedUsers[userId].websocket.send(JSON.stringify(data))
               }
 
               localLogger.info(
-                `Sent message to user ${user} in conversation ${result.message.conversation_id}`
+                `Sent message to user ${userId} in conversation ${result.message.conversation_id}`
               )
             }
           )
         } else {
-          activeConversations[result.message.conversation_id] = [userId]
-          connectedUsers[userId].websocket.send(JSON.stringify(result))
+          activeConversations[data.message.conversation_id] = [currentUserId]
+          connectedUsers[currentUserId].websocket.send(JSON.stringify(data))
         }
-      } else if (result.conversation) {
+        break
+      case 'createNewConversation':
         // a new conversation was added
         // send the new conversation to every connected user in the conversation
         // and add the conversation to the active conversations
-        activeConversations[result.conversation.conversation_id] = [userId]
-        result.conversation.users.forEach((user) => {
-          if (connectedUsers?.[user.user_id]) {
-            connectedUsers[user.user_id].websocket.send(JSON.stringify(result))
-          }
-        })
-      } else if (result.messages) {
+        if (data.conversation_exists === false) {
+          const newConversation = data.conversations[0]
+          activeConversations[newConversation.conversation_id] =
+            newConversation.users.map(({ user_id }) => user_id)
+
+          newConversation.users.forEach(({ user_id }) => {
+            if (connectedUsers?.[user_id]) {
+              connectedUsers[user_id].websocket.send(JSON.stringify(data))
+            }
+          })
+        } else {
+          connectedUsers[currentUserId].websocket.send(JSON.stringify(data))
+        }
+        break
+      case 'getConversation':
         // responding to a request for all the messages for a particular conversation
-        connectedUsers[userId].websocket.send(JSON.stringify(result))
-      } else if (result.conversations) {
+        connectedUsers[currentUserId].websocket.send(JSON.stringify(data))
+        break
+      case 'getAllConversations':
         // subscribe the user to each conversation once they are connected
-        const userConversationKeys = Object.keys(result.conversations)
+        const userConversationKeys = Object.keys(data.conversations)
 
         userConversationKeys.forEach((conversationKey) => {
           if (activeConversations[conversationKey]) {
-            activeConversations[conversationKey].push(userId)
+            activeConversations[conversationKey].push(currentUserId)
             const tempConversation = new Set(
               activeConversations[conversationKey]
             )
             activeConversations[conversationKey] = [...tempConversation]
           } else {
-            activeConversations[conversationKey] = [userId]
+            activeConversations[conversationKey] = [currentUserId]
           }
         })
-        websocket.send(JSON.stringify(result))
-      } else if (result.userAdded) {
+
+        connectedUsers[currentUserId].send(JSON.stringify(data))
+        break
+      case 'addUserToConversation':
         // add the user to the list of recepients from that conversation
-        activeConversations[result.conversationId].push(result.userId)
-        activeConversations[result.conversationId].forEach((user) => {
-          if (connectedUsers[user]) {
-            connectedUsers[user].websocket.send(JSON.stringify(result))
+        activeConversations[data.conversation_id].push(data.user_id)
+        activeConversations[data.conversation_id].forEach((userId) => {
+          if (connectedUsers[userId]) {
+            connectedUsers[userId].websocket.send(JSON.stringify(data))
           }
         })
-      } else if (result.error) {
-        localLogger.error(result.error.message ?? result.error)
-      } else {
-        // forward the handled response
-        websocket.send(JSON.stringify(result))
-      }
+        break
+      default:
+        if (data.error) {
+          localLogger.error(data.error.message ?? data.error)
+        }
+
+        ws.send(JSON.stringify(data))
     }
-  )
-}
+  })
 
-const onClose = (code, reason) => {
-  logger.info(`Connection closed: ${code} ${reason}`)
-  // connectedUsers.delete(connectedUsers[userId])
-}
-
-const onConnection = (ws) => {
-  websocket = ws
-  ws.on('message', onMessage)
-  ws.on('close', onClose)
+  ws.on('close', (code, reason) => {
+    logger.info(`Connection closed: ${code} ${reason}`)
+    delete connectedUsers[currentUserId]
+  })
 }
 
 module.exports = {

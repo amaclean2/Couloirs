@@ -1,20 +1,24 @@
 const serviceHandler = require('../Config/services.js')
 
 /**
+ * @description parseMessage takes a parsed JSON object and sorts what type of message it is
+ * it then acts on the specific message type
  * @param {Object} message
  */
 const parseMessage = async ({ message, userId, logger }) => {
+  let response = null
+
   switch (message.type) {
     case 'getAllConversations':
-      return getUserConversations({ userId, logger })
-
+      response = await getUserConversations({ userId, logger })
+      break
     case 'getConversation':
-      return getConversation({
+      response = await getConversation({
         conversationId: message.conversationId,
         userId,
         logger
       })
-
+      break
     case 'verifyUser':
       if (message.deviceToken) {
         // save the device token if one is provided
@@ -31,40 +35,35 @@ const parseMessage = async ({ message, userId, logger }) => {
         )
       }
 
-      return Promise.resolve({ userJoined: true })
-
+      response = await Promise.resolve({ userJoined: true })
+      break
     case 'sendMessage':
-      return sendMessage({
+      response = await sendMessage({
         conversationId: message.conversationId,
         messageBody: message.messageBody,
         userId,
         senderName: message.senderName,
         logger
       })
-
+      break
     case 'createNewConversation':
       logger.info(JSON.stringify({ userIds: [...message.userIds, userId] }))
       if (
-        !message.userIds ||
-        !message.userIds.length ||
-        message.userIds.includes(null)
+        !message.userIds?.length ||
+        message.userIds.includes(null) ||
+        message.userIds.includes(undefined)
       ) {
-        return Promise.resolve({
-          error: 'at least two users need to be added to a conversation'
+        response = await Promise.resolve({
+          error:
+            'At least two users including the logged in user need to be added to a conversation'
         })
+        break
       }
-      logger.info(
-        JSON.stringify({
-          newConversation: true,
-          userIds: [...message.userIds, userId]
-        })
-      )
-      return createNewConversation({
+      response = await createNewConversation({
         userIds: [...message.userIds, userId],
-        senderId: userId,
         logger
       })
-
+      break
     case 'addUserToConversation':
       if (!message.userId || !message.conversationId) {
         logger.error(
@@ -74,131 +73,120 @@ const parseMessage = async ({ message, userId, logger }) => {
           })
         )
 
-        return Promise.resolve({
+        response = await Promise.resolve({
           error:
             'a userId and a conversationId need to be specified to add the user to the conversation'
         })
+        break
       }
 
-      return addNewUserToConversation({
+      response = await addNewUserToConversation({
         userId: message.userId,
         conversationId: message.conversationId,
         logger
       })
+      break
     default:
-      return Promise.resolve({ error: 'no message type provided' })
+      response = await Promise.resolve({ error: 'no message type provided' })
+      break
   }
+  return { ...response, request: message.type }
 }
 
-const getConversation = ({ conversationId, userId, logger }) => {
-  logger.info(`Getting conversation ${conversationId}`)
-  return serviceHandler.messagingService
-    .getConversation({
+const getConversation = async ({ conversationId, userId, logger }) => {
+  try {
+    const messages = await serviceHandler.messagingService.getConversation({
       conversationId,
       userId
     })
-    .then((messages) => ({ messages }))
-    .catch((error) => {
-      logger.error(error)
-      return Promise.resolve({
-        error: `No conversation found for id ${conversationId}`
+    return { messages }
+  } catch (error) {
+    logger.error(error)
+    return Promise.resolve({
+      error: `No conversation found for id ${conversationId}`
+    })
+  }
+}
+
+const getUserConversations = async ({ userId, logger }) => {
+  try {
+    const conversations =
+      await serviceHandler.messagingService.getConversationsPerUser({ userId })
+    return { conversations }
+  } catch (error) {
+    logger.error(error)
+    return Promise.resolve({
+      error: `Conversations not found for user ${userId}`
+    })
+  }
+}
+
+const addNewUserToConversation = async ({ userId, conversationId, logger }) => {
+  try {
+    logger.info(`Adding new user to conversation ${conversationId}`)
+    await serviceHandler.messagingService.expandConversation({
+      userId,
+      conversationId
+    })
+
+    logger.info(
+      JSON.stringify({
+        newUserToConversation: true,
+        userId,
+        conversationId
       })
-    })
+    )
+
+    return {
+      user_added: true,
+      user_id: userId,
+      conversation_id: conversationId
+    }
+  } catch (error) {
+    logger.error(error)
+    return { userAdded: false, error: { message: error.message ?? error } }
+  }
 }
 
-const getUserConversations = ({ userId, logger }) => {
-  logger.info(`Getting conversations for user ${userId}`)
-  return serviceHandler.messagingService
-    .getConversationsPerUser({ userId })
-    .then((conversations) => ({ conversations }))
-    .catch((error) => {
-      logger.error(error)
-      return Promise.resolve({
-        error: `Conversations not found for user ${userId}`
+const createNewConversation = async ({ userIds, logger }) => {
+  try {
+    const { conversation_exists, conversations } =
+      await serviceHandler.messagingService.createConversation({
+        userIds
       })
-    })
-}
 
-const addNewUserToConversation = ({ userId, conversationId, logger }) => {
-  logger.info(
-    JSON.stringify({
-      newUserToConversation: true,
-      userId,
-      conversationId
-    })
-  )
+    logger.info(JSON.stringify({ conversation_exists, conversations }))
 
-  return serviceHandler.messagingService
-    .expandConversation({
-      userId,
-      conversationId
-    })
-    .then(() => ({
-      useAdded: true,
-      userId,
-      conversationId
-    }))
-    .catch((error) => {
-      logger.error(error)
-      return { userAdded: false, error: { message: error.message ?? error } }
-    })
-}
-
-const createNewConversation = ({ userIds, senderId, logger }) => {
-  return serviceHandler.messagingService
-    .createConversation({ userIds })
-    .then((resp) => {
-      if (resp.conversation_exists) {
-        return {
-          conversation: {
-            users: userIds.map((id) => ({
-              user_id: id
-            })),
-            ...resp.conversation
-          }
-        }
-      }
-
-      return {
-        conversation: {
-          users: userIds.map((id) => ({
-            user_id: id
-          })),
-          conversation_id: resp.conversation_id,
-          last_message: '',
-          unread: false
-        },
-        senderId
-      }
-    })
-    .catch((error) => {
-      logger.error(error)
-      return Promise.resolve({ error: 'could not create a new conversation' })
-    })
+    return { conversations, conversation_exists }
+  } catch (error) {
+    logger.eror(error)
+    return Promise.resolve({ error: 'could not create a new conversation' })
+  }
 }
 
 const sendMessage = async ({
-  userId,
+  userId: senderId,
   conversationId,
   messageBody,
   senderName,
   logger
 }) => {
   try {
-    logger.info(JSON.stringify({ receivedMessage: { conversationId, userId } }))
+    logger.info(
+      JSON.stringify({ receivedMessage: { conversationId, senderId } })
+    )
 
-    const message = await serviceHandler.messagingService.sendMessage({
-      conversationId,
-      senderId: userId,
-      messageBody
-    })
-
-    return {
-      message: {
-        ...message,
-        sender_name: senderName
-      }
+    const message = {
+      ...(await serviceHandler.messagingService.sendMessage({
+        conversationId,
+        senderId,
+        senderName,
+        messageBody
+      })),
+      sender_name: senderName
     }
+
+    return { message }
   } catch (error) {
     logger.error(error)
     return Promise.resolve({ error: 'Could not send message' })
